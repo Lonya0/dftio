@@ -173,7 +173,10 @@ def get_basic_info(file_path):
     for line in lines[idx:]:
         # Extract NBasis
         if line.strip().startswith("NBasis"):
-            nbasis = int(line.split()[2])
+            match = re.search(r"\b\d+\b", line)
+            if match:
+                nbasis = int(match.group(0))
+                break
             break
     if nbasis is None:
         raise RuntimeError("NBasis keyword not found in the log file.")
