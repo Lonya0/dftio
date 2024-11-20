@@ -26,7 +26,7 @@ def chk_valid_gau_log_unit(file_path, hamiltonian=False, overlap=False, density_
     if overlap:
         required_patterns.append(r"\*+\s*Overlap\s*\*+")
     if density_matrix:
-        required_patterns.append(r"\s*Density Matrix:")
+        required_patterns.append(r" Total density matrix:")
 
     if not is_fixed_convention:
         required_patterns.extend([
@@ -385,35 +385,6 @@ def matrix_to_image(matrix, filename='matrix_image.png', orbital_labels=None):
 
 
 # modified from Mokit,
-# see https://github.com/1234zou/MOKIT/blob/7499356b1ff0f9d8b9efbb846395059867dbba4c/src/rwwfn.f90#L3405
-# Key word IOp(5/33=2) is required
-def read_density_from_gau_log(logname, nbf):
-    target_pattern = re.compile(r'\s*Density Matrix:')
-    mat = np.zeros((nbf, nbf))
-    with open(logname, 'r') as f:
-        # Search for the target pattern
-        for line in f:
-            if target_pattern.search(line):
-                break
-        else:
-            raise ValueError(f"No match for Density matrix found in file {logname}")
-        # Read the matrix data
-        n = (nbf + 4) // 5  # Equivalent to ceiling division
-        for i in range(n):
-            next(f)  # Skip the line with column numbers
-            k = 5 * i
-            for j in range(k, nbf):
-                line = next(f)[20:].split()
-                m = min(5, nbf - k)
-                actual_line_len = len(line[0:m])
-                mat[k:k + actual_line_len, j] = [float(x.replace('D', 'E')) for x in line[0:m]]
-
-    # Mirror the upper triangle to the lower triangle
-    mat = mat + mat.T - np.diag(mat.diagonal())
-    return mat
-
-
-# modified from Mokit,
 # see https://github.com/1234zou/MOKIT/blob/7499356b1ff0f9d8b9efbb846395059867dbba4c/src/rwwfn.f90#L895
 # Key word IOp(3/33=1) is required
 def read_int1e_from_gau_log(logname, matrix_type, nbf):
@@ -483,29 +454,6 @@ def read_fock_from_gau_log(logname, nbf):
     mat = mat + mat.T - np.diag(mat.diagonal())
     return mat
 
-# modified from Mokit,
-# see https://github.com/1234zou/MOKIT/blob/7499356b1ff0f9d8b9efbb846395059867dbba4c/src/rwwfn.f90#L3405
-# Key word IOp(5/33=3, 3/33=1) is required
-def read_density_from_gau_log(logname, nbf):
-    target_pattern = re.compile(rf" Total density matrix:")
-    mat = np.zeros((nbf, nbf))
-    with open(logname, 'r') as f:
-        for line in f:
-            if target_pattern.search(line):
-                break
-        # Read the matrix data
-        n = (nbf + 4) // 5  # Equivalent to ceiling division
-        for i in range(n):
-            next(f)  # Skip the line with column numbers
-            k = 5 * i
-            for j in range(k, nbf):
-                line = next(f).split()
-                m = min(5, nbf - k)
-                actual_line_len = len(line[1:m + 1])
-                mat[k:k + actual_line_len, j] = [float(x.replace('D', 'E')) for x in line[1:m + 1]]
-    # Mirror the upper triangle to the lower triangle
-    mat = mat + mat.T - np.diag(mat.diagonal())
-    return mat
 
 # modified from Mokit,
 # see https://github.com/1234zou/MOKIT/blob/7499356b1ff0f9d8b9efbb846395059867dbba4c/src/rwwfn.f90#L3405
