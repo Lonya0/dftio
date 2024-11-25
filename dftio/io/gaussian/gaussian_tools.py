@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from ase import Atoms, Atom
 
-from .gaussian_conventionns import orbital_idx_map
+from .gaussian_conventions import orbital_idx_map
 
 
 def chk_valid_gau_log_unit(file_path, hamiltonian=False, overlap=False, density_matrix=False,

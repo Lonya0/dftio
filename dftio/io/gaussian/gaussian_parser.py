@@ -7,7 +7,7 @@ from ...data import _keys
 from ...register import Register
 from ..parse import Parser, ParserRegister
 from .gaussian_tools import *
-from .gaussian_conventionns import orbital_sign_map
+from .gaussian_conventions import orbital_sign_map
 
 
 @ParserRegister.register("gaussian")
