@@ -43,6 +43,8 @@ optional arguments:
   -lp LOG_PATH, --log-path LOG_PATH
                         set log file to log messages to disk, if not specified, the logs will only be output to console (default: None)
   -m MODE, --mode MODE  The name of the DFT software. (default: abacus)
+  -n NUM_WORKERS, --num_workers NUM_WORKERS
+                        The number of workers used to parse the dataset. (For n>1, we use the multiprocessing to accelerate io.) (default: 1)
   -r ROOT, --root ROOT  The root directory of the DFT files. (default: ./)
   -p PREFIX, --prefix PREFIX
                         The prefix of the DFT files under root. (default: frame)
