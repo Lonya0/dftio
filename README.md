@@ -21,6 +21,7 @@ Current:
 | RESCU    | √         |             | √           |                | √              |
 | SIESTA   | √         |             | √           | √              | √              |
 | Gaussian | √         |             | √           | √              | √              |
+| VASP     | √         | √           |             |                |                |
 
 Ongoing:
 
