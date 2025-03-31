@@ -227,7 +227,6 @@ class Parser(ABC):
 
         # write blocks
         if any([hamiltonian is not None, overlap is not None, density_matrix is not None]) and any([hamiltonian, overlap, density_matrix]):
-            print(hamiltonian, overlap, density_matrix)
             with open(os.path.join(out_dir, "basis.dat"), 'w') as f:
                f.write(str(self.get_basis(idx)))
 
