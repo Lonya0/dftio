@@ -3,14 +3,14 @@ from scipy.linalg import block_diag
 import re
 from tqdm import tqdm
 from collections import Counter
-from ...constants import orbitalId, ABACUS2DFTIO
+from dftio.constants import orbitalId, ABACUS2DFTIO
 import ase
 import dpdata
 import os
 import numpy as np
-from ..parse import Parser, ParserRegister, find_target_line
-from ...data import _keys
-from ...register import Register
+from dftio.io.parse import Parser, ParserRegister, find_target_line
+from dftio.data import _keys
+from dftio.register import Register
 
 @ParserRegister.register("abacus")
 class AbacusParser(Parser):

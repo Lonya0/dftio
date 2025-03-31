@@ -8,7 +8,7 @@ import h5py
 import ase
 import pickle
 import lmdb
-from ..data import _keys
+from dftio.data import _keys
 from dftio.utils import j_must_have
 from dftio.register import Register
 from ase.io.trajectory import Trajectory

@@ -3,10 +3,10 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 from dftio import __version__
-from .io.parse import ParserRegister
+from dftio.io.parse import ParserRegister
 from tqdm import tqdm
 from multiprocessing.pool import Pool
-from .logger import set_log_handles
+from dftio.logger import set_log_handles
 from dftio.plot.plot_eigs import BandPlot
 
 def get_ll(log_level: str) -> int:
