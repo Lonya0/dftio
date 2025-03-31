@@ -7,6 +7,7 @@ from .io.parse import ParserRegister
 from tqdm import tqdm
 from multiprocessing.pool import Pool
 from .logger import set_log_handles
+from dftio.plot.plot_eigs import BandPlot
 
 def get_ll(log_level: str) -> int:
     """Convert string to python logging level.
@@ -145,6 +146,27 @@ def main_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Whether to parse the kpoints and eigenvalues",
     )
+    
+    parser_band = subparsers.add_parser(
+        "band",
+        parents=[parser_log],
+        help="plot band for eigenvalues data",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser_band.add_argument(
+        "-r",
+        "--root",
+        type=str,
+        default="./",
+        help="The root directory of eigenvalues data.",
+    )
+    parser_band.add_argument(
+        "-f",
+        "--format",
+        type=str,
+        default=None,
+        help="The output file format, should be dat or ase. default is None, which means auto detect.",
+    )
 
     return parser
 
@@ -206,7 +228,12 @@ def main():
             for i in tqdm(range(len(parser)), desc="Parsing the DFT files: "):
                 parser.write(idx=i, **dict_args)
         
-
+    if args.command == "band":
+        bandplot = BandPlot(
+            **dict_args
+        )
+        bandplot.load_dat(fmt=args.format)
+        bandplot.plot()
 
 if __name__ == "__main__":
     main()
