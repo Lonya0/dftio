@@ -69,8 +69,8 @@ class BandPlot(object):
     def plot(self):
         # plot band structure
         fig, ax = plt.subplots()
-        for i in range(self.eigs.shape[1]):
-            ax.plot(self.eigs[:,:], 'b-', lw=1)
+        
+        ax.plot(self.eigs[:,:], 'b-', lw=1)
         
         ax.set_xlabel("k-point")
         ax.set_ylabel("Energy (eV)")
