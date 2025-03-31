@@ -43,8 +43,8 @@ class VASPParser(Parser):
     @staticmethod
     def read_EIGENVAL(file):
         Nhse = 0 # number of HSE bands, used for HSE, 
-        f = open(file, 'r')
-        data = f.readlines()
+        with open(file, 'r') as f: 
+            data = f.readlines()
         # Read the number of bands
         NBND = int(re.findall('[0-9]+', data[5])[2])
         k_list = []
