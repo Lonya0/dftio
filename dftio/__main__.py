@@ -116,7 +116,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--format",
         type=str,
         default="dat",
-        help="The output file format, should be either dat or lmdb.",
+        help="The output file format, should be dat, ase or lmdb.",
     )
 
     parser_parse.add_argument(

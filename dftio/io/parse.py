@@ -11,6 +11,8 @@ import lmdb
 from ..data import _keys
 from dftio.utils import j_must_have
 from dftio.register import Register
+from ase.io.trajectory import Trajectory
+
 
 def find_target_line(f, target):
     line = f.readline()
@@ -82,6 +84,24 @@ class Parser(ABC):
 
         return ase.Atoms(numbers=atomic_number).get_chemical_formula()
 
+    def structure_to_ase(self, structure):
+        sys = ase.Atoms(
+            numbers=structure[_keys.ATOMIC_NUMBERS_KEY],
+            positions=structure[_keys.POSITIONS_KEY],
+            pbc=structure[_keys.PBC_KEY],
+            cell=structure[_keys.CELL_KEY]
+        )
+        return sys
+    
+    def ase_to_structure(self, sys):
+        structure = {
+            _keys.ATOMIC_NUMBERS_KEY: sys.get_atomic_numbers().astype(np.int32),
+            _keys.PBC_KEY: sys.pbc,
+            _keys.POSITIONS_KEY: sys.positions.astype(np.float32),
+            _keys.CELL_KEY: sys.cell.astype(np.float32)
+        }
+        return structure
+    
     @abstractmethod
     def get_eigenvalue(self, idx):
         pass # return a dict with energy eigenvalue and kpoint as key, keys includes: [_keys.ENERGY_EIGENVALUE_KEY, _keys.KPOINT_KEY]
@@ -155,18 +175,34 @@ class Parser(ABC):
     def write(self, idx, outroot, format, eigenvalue, hamiltonian, overlap, density_matrix, **kwargs):
         if format == "hdf5":
             self.write_hdf5(idx, outroot, eigenvalue, hamiltonian, overlap, density_matrix)
-        elif format == "dat":
-            self.write_dat(idx, outroot, eigenvalue, hamiltonian, overlap, density_matrix)
+        elif format in ["dat", "ase"]:
+            self.write_dat(idx=idx, outroot=outroot, fmt=format, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix)
         elif format == "lmdb":
             self.write_lmdb(idx, outroot, eigenvalue, hamiltonian, overlap, density_matrix)
         else:
             raise NotImplementedError(f"Format: {format} is not implemented!")
-
-
+        
     def write_hdf5(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False):
         pass
     
-    def write_dat(self, idx, outroot, eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False):
+    def write_struct(self, structure, out_dir, fmt='dat'):
+        # write structure
+        if fmt == 'dat':
+            # The abacus must have PBC, so here we save cell by default
+            np.savetxt(os.path.join(out_dir, "cell.dat"), structure[_keys.CELL_KEY].reshape(-1, 3))
+            np.savetxt(os.path.join(out_dir, "positions.dat"), structure[_keys.POSITIONS_KEY].reshape(-1, 3))
+            np.savetxt(os.path.join(out_dir, "atomic_numbers.dat"), structure[_keys.ATOMIC_NUMBERS_KEY], fmt='%d')
+            np.savetxt(os.path.join(out_dir, "pbc.dat"), structure[_keys.PBC_KEY])
+        
+        elif fmt=='ase':
+            self.structure_to_ase(structure)
+            trajfile = Trajectory(os.path.join(out_dir, "xdat.traj"), 'w')
+            trajfile.write(self.structure_to_ase(structure))
+            trajfile.close()
+        else:
+            raise NotImplementedError(f"Format: {fmt} is not implemented!")
+
+    def write_dat(self, idx, outroot, fmt='dat', eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False):
         # write structure
         os.makedirs(outroot, exist_ok=True)
        
@@ -175,11 +211,13 @@ class Parser(ABC):
         out_dir = os.path.join(outroot, self.formula(idx=idx)+".{}".format(idx))
         os.makedirs(out_dir, exist_ok=True)
         # The abacus must have PBC, so here we save cell by default
-        np.savetxt(os.path.join(out_dir, "cell.dat"), structure[_keys.CELL_KEY].reshape(-1, 3))
-        np.savetxt(os.path.join(out_dir, "positions.dat"), structure[_keys.POSITIONS_KEY].reshape(-1, 3))
-        np.savetxt(os.path.join(out_dir, "atomic_numbers.dat"), structure[_keys.ATOMIC_NUMBERS_KEY], fmt='%d')
-        np.savetxt(os.path.join(out_dir, "pbc.dat"), structure[_keys.PBC_KEY])
-
+        # np.savetxt(os.path.join(out_dir, "cell.dat"), structure[_keys.CELL_KEY].reshape(-1, 3))
+        # np.savetxt(os.path.join(out_dir, "positions.dat"), structure[_keys.POSITIONS_KEY].reshape(-1, 3))
+        # np.savetxt(os.path.join(out_dir, "atomic_numbers.dat"), structure[_keys.ATOMIC_NUMBERS_KEY], fmt='%d')
+        # np.savetxt(os.path.join(out_dir, "pbc.dat"), structure[_keys.PBC_KEY])
+        
+        # write structure
+        self.write_struct(structure, out_dir, fmt=fmt)
 
         # write eigenvalue
         if eigenvalue:
@@ -188,35 +226,36 @@ class Parser(ABC):
             np.save(os.path.join(out_dir, "eigenvalues.npy"), eigstatus[_keys.ENERGY_EIGENVALUE_KEY].reshape(-1, eigstatus[_keys.ENERGY_EIGENVALUE_KEY].shape[-1]))
 
         # write blocks
-        if any([hamiltonian is not None, overlap is not None, density_matrix is not None]):
+        if any([hamiltonian is not None, overlap is not None, density_matrix is not None]) and any([hamiltonian, overlap, density_matrix]):
+            print(hamiltonian, overlap, density_matrix)
             with open(os.path.join(out_dir, "basis.dat"), 'w') as f:
                f.write(str(self.get_basis(idx)))
 
-        ham, ovp, dm = self.get_blocks(idx, hamiltonian, overlap, density_matrix)
-        if hamiltonian:
-            with h5py.File(os.path.join(out_dir, "hamiltonians.h5"), 'w') as fid:
-                for i in range(len(ham)):
-                    default_group = fid.create_group(str(i))
-                    for key_str, value in ham[i].items():
-                        default_group.create_dataset(key_str, data=value)
-        del ham
-        
-        if overlap:
-            with h5py.File(os.path.join(out_dir, "overlaps.h5"), 'w') as fid:
-                for i in range(len(ovp)):
-                    default_group = fid.create_group(str(i))
-                    for key_str, value in ovp[i].items():
-                        default_group.create_dataset(key_str, data=value)
-        del ovp
-        
-        if density_matrix:
-            with h5py.File(os.path.join(out_dir, "density_matrices.h5"), 'w') as fid:
-                for i in range(len(dm)):
-                    default_group = fid.create_group(str(i))
-                    for key_str, value in dm[i].items():
-                        default_group.create_dataset(key_str, data=value)
-        
-        del dm
+            ham, ovp, dm = self.get_blocks(idx, hamiltonian, overlap, density_matrix)
+            if hamiltonian:
+                with h5py.File(os.path.join(out_dir, "hamiltonians.h5"), 'w') as fid:
+                    for i in range(len(ham)):
+                        default_group = fid.create_group(str(i))
+                        for key_str, value in ham[i].items():
+                            default_group.create_dataset(key_str, data=value)
+            del ham
+            
+            if overlap:
+                with h5py.File(os.path.join(out_dir, "overlaps.h5"), 'w') as fid:
+                    for i in range(len(ovp)):
+                        default_group = fid.create_group(str(i))
+                        for key_str, value in ovp[i].items():
+                            default_group.create_dataset(key_str, data=value)
+            del ovp
+            
+            if density_matrix:
+                with h5py.File(os.path.join(out_dir, "density_matrices.h5"), 'w') as fid:
+                    for i in range(len(dm)):
+                        default_group = fid.create_group(str(i))
+                        for key_str, value in dm[i].items():
+                            default_group.create_dataset(key_str, data=value)
+            
+            del dm
 
         return True
     
