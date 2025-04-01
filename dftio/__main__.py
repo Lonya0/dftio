@@ -165,7 +165,22 @@ def main_parser() -> argparse.ArgumentParser:
         "--format",
         type=str,
         default=None,
-        help="The output file format, should be dat or ase. default is None, which means auto detect.",
+        help="load file format, should be dat or ase. default is None, which means auto detect.",
+    )
+    
+    parser_band.add_argument(
+        "-min",
+        "--band_index_min",
+        type=int,
+        default=0,
+        help="The minimum band index to plot.",
+    )
+    parser_band.add_argument(
+        "-max",
+        "--band_index_max",
+        type=int,
+        default=None,
+        help="The maximum band index to plot.",
     )
 
     return parser
@@ -233,7 +248,7 @@ def main():
             **dict_args
         )
         bandplot.load_dat(fmt=args.format)
-        bandplot.plot()
+        bandplot.plot(min=args.band_index_min, max=args.band_index_max)
 
 if __name__ == "__main__":
     main()

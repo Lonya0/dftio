@@ -66,12 +66,19 @@ class BandPlot(object):
         
         assert self.eigs.shape[0] == self.kpoints.shape[0], "eigenvalues and kpoints shape mismatch!"
 
-    def plot(self):
+    def plot(self, min:int=0,max:int=None):
         # plot band structure
         fig, ax = plt.subplots()
         
-        ax.plot(self.eigs[:,:], 'b-', lw=1)
-        
+        nbands = self.eigs.shape[1]
+        if max is None:
+            max = nbands
+        else:
+            max = min(max, nbands)
+        assert max>min, "max should be larger than min!"
+
+        ax.plot(self.eigs[:,min:max], 'b-', lw=1)
+        ax.text(0.5, 0.5, f"band windown: {min} - {max}", ha='center', va='center', transform=ax.transAxes)
         ax.set_xlabel("k-point")
         ax.set_ylabel("Energy (eV)")
         ax.set_title("Band Structure")
