@@ -3,11 +3,11 @@ import json
 
 import numpy as np
 from ase import Atoms, Atom
-from ...data import _keys
-from ...register import Register
-from ..parse import Parser, ParserRegister
-from .gaussian_tools import *
-from .gaussian_conventions import orbital_sign_map
+from dftio.data import _keys
+from dftio.register import Register
+from dftio.io.parse import Parser, ParserRegister
+from dftio.io.gaussian.gaussian_tools import *
+from dftio.io.gaussian.gaussian_conventions import orbital_sign_map
 
 
 @ParserRegister.register("gaussian")

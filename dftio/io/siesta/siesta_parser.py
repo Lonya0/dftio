@@ -3,14 +3,14 @@ from scipy.linalg import block_diag
 import re
 from tqdm import tqdm
 from collections import Counter
-from ...constants import orbitalId, SIESTA2DFTIO,anglrMId
+from dftio.constants import orbitalId, SIESTA2DFTIO,anglrMId
 import ase
 import dpdata
 import os
 import numpy as np
 from collections import Counter
-from ..parse import Parser, ParserRegister, find_target_line
-from ...data import _keys
+from dftio.io.parse import Parser, ParserRegister, find_target_line
+from dftio.data import _keys
 import sisl
 
 

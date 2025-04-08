@@ -1,3 +1,3 @@
-from .neighbourlist import PrimitiveFieldsNeighborList
-from .field import Field
-from .atomicbasis import AtomicBasis
+from dftio.datastruct.neighbourlist import PrimitiveFieldsNeighborList
+from dftio.datastruct.field import Field
+from dftio.datastruct.atomicbasis import AtomicBasis

@@ -3,10 +3,11 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 from dftio import __version__
-from .io.parse import ParserRegister
+from dftio.io.parse import ParserRegister
 from tqdm import tqdm
 from multiprocessing.pool import Pool
-from .logger import set_log_handles
+from dftio.logger import set_log_handles
+from dftio.plot.plot_eigs import BandPlot
 
 def get_ll(log_level: str) -> int:
     """Convert string to python logging level.
@@ -116,7 +117,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--format",
         type=str,
         default="dat",
-        help="The output file format, should be either dat or lmdb.",
+        help="The output file format, should be dat, ase or lmdb.",
     )
 
     parser_parse.add_argument(
@@ -144,6 +145,42 @@ def main_parser() -> argparse.ArgumentParser:
         "--eigenvalue",
         action="store_true",
         help="Whether to parse the kpoints and eigenvalues",
+    )
+    
+    parser_band = subparsers.add_parser(
+        "band",
+        parents=[parser_log],
+        help="plot band for eigenvalues data",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser_band.add_argument(
+        "-r",
+        "--root",
+        type=str,
+        default="./",
+        help="The root directory of eigenvalues data.",
+    )
+    parser_band.add_argument(
+        "-f",
+        "--format",
+        type=str,
+        default=None,
+        help="load file format, should be dat or ase. default is None, which means auto detect.",
+    )
+    
+    parser_band.add_argument(
+        "-min",
+        "--band_index_min",
+        type=int,
+        default=0,
+        help="The minimum band index to plot.",
+    )
+    parser_band.add_argument(
+        "-max",
+        "--band_index_max",
+        type=int,
+        default=None,
+        help="The maximum band index to plot.",
     )
 
     return parser
@@ -206,7 +243,12 @@ def main():
             for i in tqdm(range(len(parser)), desc="Parsing the DFT files: "):
                 parser.write(idx=i, **dict_args)
         
-
+    if args.command == "band":
+        bandplot = BandPlot(
+            **dict_args
+        )
+        bandplot.load_dat(fmt=args.format)
+        bandplot.plot(min=args.band_index_min, max=args.band_index_max)
 
 if __name__ == "__main__":
     main()

@@ -3,8 +3,8 @@ from scipy.interpolate import RegularGridInterpolator
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
 from matplotlib import rc
-from ..op.make_grid import make_simple_grid
-from .neighbourlist import PrimitiveFieldsNeighborList
+from dftio.op.make_grid import make_simple_grid
+from dftio.datastruct.neighbourlist import PrimitiveFieldsNeighborList
 import torch
 
 def _getline(cube):
