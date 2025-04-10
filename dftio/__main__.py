@@ -146,6 +146,13 @@ def main_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Whether to parse the kpoints and eigenvalues",
     )
+    parser_parse.add_argument(
+        "-bi",
+        "--band_ini",
+        type=int,
+        default=0,
+        help="The initial band index for eigenvalues to save.(0-band_ini) bands will be ignored!"
+    )
     
     parser_band = subparsers.add_parser(
         "band",

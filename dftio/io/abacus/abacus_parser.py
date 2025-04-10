@@ -49,12 +49,12 @@ class AbacusParser(Parser):
         return mode
     
     # essential
-    def get_eigenvalue(self, idx):
+    def get_eigenvalue(self, idx, band_ini=0):
         path = self.raw_datas[idx]
         mode = self.get_mode(idx)
         if mode in ["scf", "nscf"]:
             assert os.path.exists(os.path.join(path, "OUT.ABACUS", "BANDS_1.dat"))
-            eigs = np.loadtxt(os.path.join(path, "OUT.ABACUS", "BANDS_1.dat"))[np.newaxis, :, 2:]
+            eigs = np.loadtxt(os.path.join(path, "OUT.ABACUS", "BANDS_1.dat"))[np.newaxis, :, 2+band_ini:]
             assert os.path.exists(os.path.join(path, "OUT.ABACUS", "kpoints"))
             kpts = []
             with open(os.path.join(path, "OUT.ABACUS", "kpoints"), "r") as f:
