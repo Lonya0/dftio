@@ -148,7 +148,7 @@ def main_parser() -> argparse.ArgumentParser:
     )
     parser_parse.add_argument(
         "-min",
-        "--band_ini",
+        "--band_index_min",
         type=int,
         default=0,
         help="The initial band index for eigenvalues to save.(0-band_ini) bands will be ignored!"
