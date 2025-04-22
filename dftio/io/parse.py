@@ -133,7 +133,7 @@ class Parser(ABC):
         return structure
     
     @abstractmethod
-    def get_eigenvalue(self, idx, band_ini):
+    def get_eigenvalue(self, idx, band_index_min):
         pass # return a dict with energy eigenvalue and kpoint as key, keys includes: [_keys.ENERGY_EIGENVALUE_KEY, _keys.KPOINT_KEY]
 
     @abstractmethod
@@ -204,17 +204,17 @@ class Parser(ABC):
 
         return True
     
-    def write(self, idx, outroot, format, eigenvalue, hamiltonian, overlap, density_matrix, band_ini, **kwargs):
+    def write(self, idx, outroot, format, eigenvalue, hamiltonian, overlap, density_matrix, band_index_min, **kwargs):
         if format == "hdf5":
-            self.write_hdf5(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_ini=band_ini)
+            self.write_hdf5(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         elif format in ["dat", "ase"]:
-            self.write_dat(idx=idx, outroot=outroot, fmt=format, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_ini=band_ini)
+            self.write_dat(idx=idx, outroot=outroot, fmt=format, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         elif format == "lmdb":
-            self.write_lmdb(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_ini=band_ini)
+            self.write_lmdb(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         else:
             raise NotImplementedError(f"Format: {format} is not implemented!")
         
-    def write_hdf5(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False, band_ini=0):
+    def write_hdf5(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False, band_index_min=0):
         pass
     
     def write_struct(self, structure, out_dir, fmt='dat'):
@@ -235,7 +235,7 @@ class Parser(ABC):
         else:
             raise NotImplementedError(f"Format: {fmt} is not implemented!")
 
-    def write_dat(self, idx, outroot, fmt='dat', eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False, band_ini=0):
+    def write_dat(self, idx, outroot, fmt='dat', eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False, band_index_min=0):
         # write structure
         os.makedirs(outroot, exist_ok=True)
        
@@ -254,7 +254,7 @@ class Parser(ABC):
 
         # write eigenvalue
         if eigenvalue:
-            eigstatus = self.get_eigenvalue(idx=idx, band_ini=band_ini)
+            eigstatus = self.get_eigenvalue(idx=idx, band_index_min=band_index_min)
             self.check_eigenvalue(idx=idx, eigstatus=eigstatus)
             np.save(os.path.join(out_dir, "kpoints.npy"), eigstatus[_keys.KPOINT_KEY])
             np.save(os.path.join(out_dir, "eigenvalues.npy"), eigstatus[_keys.ENERGY_EIGENVALUE_KEY])
@@ -292,14 +292,14 @@ class Parser(ABC):
 
         return True
     
-    def write_lmdb(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False,band_ini=0):
+    def write_lmdb(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False,band_index_min=0):
         os.makedirs(outroot, exist_ok=True)
         out_dir = os.path.join(outroot, "data.{}.lmdb".format(os.getpid()))
         structure = self.get_structure(idx)
         if any([hamiltonian, overlap, density_matrix]):
             ham, ovp, dm = self.get_blocks(idx, hamiltonian, overlap, density_matrix)
         if eigenvalue:
-            eigstatus = self.get_eigenvalue(idx=idx, band_ini=band_ini)
+            eigstatus = self.get_eigenvalue(idx=idx, band_index_min=band_index_min)
 
         n_frames = structure[_keys.POSITIONS_KEY].shape[0]
         lmdb_env = lmdb.open(out_dir, map_size=1048576000000, lock=True)

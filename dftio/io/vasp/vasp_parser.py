@@ -37,11 +37,11 @@ class VASPParser(Parser):
     
     
     # essential
-    def get_eigenvalue(self, idx, band_ini=0):
+    def get_eigenvalue(self, idx, band_index_min=0):
         path = self.raw_datas[idx]
         assert os.path.exists(os.path.join(path, "EIGENVAL"))
         kpts, eigs = self.read_EIGENVAL(os.path.join(path, "EIGENVAL"))
-        eigs = eigs[:, :, band_ini:] # [1, nk, nbands]
+        eigs = eigs[:, :, band_index_min:] # [1, nk, nbands]
         return {_keys.ENERGY_EIGENVALUE_KEY: eigs.astype(np.float32), _keys.KPOINT_KEY: kpts.astype(np.float32)}
     
     @staticmethod
