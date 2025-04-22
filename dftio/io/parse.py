@@ -85,25 +85,55 @@ class Parser(ABC):
         return ase.Atoms(numbers=atomic_number).get_chemical_formula()
 
     def structure_to_ase(self, structure):
-        sys = ase.Atoms(
-            numbers=structure[_keys.ATOMIC_NUMBERS_KEY],
-            positions=structure[_keys.POSITIONS_KEY],
-            pbc=structure[_keys.PBC_KEY],
-            cell=structure[_keys.CELL_KEY]
-        )
-        return sys
+        self.check_structure(idx=None, structure=structure)
+        cell = structure[_keys.CELL_KEY]
+        nframe = cell.shape[0] 
+        ase_lists = []
+        for i in range(nframe):
+            ase_lists.append(ase.Atoms(
+                numbers=structure[_keys.ATOMIC_NUMBERS_KEY],
+                positions=structure[_keys.POSITIONS_KEY][i],
+                pbc=structure[_keys.PBC_KEY],
+                cell=cell[i]
+            ))
+        return ase_lists
     
     def ase_to_structure(self, sys):
-        structure = {
+        if isinstance(sys, list):
+            pos = []
+            cell = []
+            pbc = sys[0].pbc
+            atom_numbs = sys[0].get_atomic_numbers()
+            for s in sys:
+                assert isinstance(s, ase.Atoms), "The input system is not a list of ase.Atoms object!"
+                pos.append(s.positions)
+                cell.append(s.cell)
+                assert np.all(s.pbc == pbc), "The input system is not a list of ase.Atoms object with same PBC!"
+                assert np.all(s.get_atomic_numbers() == atom_numbs), "The input system is not a list of ase.Atoms object with same atomic numbers!"
+            
+            structure = {
+                _keys.ATOMIC_NUMBERS_KEY: atom_numbs.astype(np.int32),
+                _keys.PBC_KEY: pbc,
+                _keys.POSITIONS_KEY: np.array(pos).astype(np.float32),
+                _keys.CELL_KEY: np.array(cell).astype(np.float32)
+            }
+
+        elif isinstance(sys, ase.Atoms):
+            structure = {
             _keys.ATOMIC_NUMBERS_KEY: sys.get_atomic_numbers().astype(np.int32),
             _keys.PBC_KEY: sys.pbc,
-            _keys.POSITIONS_KEY: sys.positions.astype(np.float32),
-            _keys.CELL_KEY: sys.cell.astype(np.float32)
-        }
+            _keys.POSITIONS_KEY: sys.positions[np.newaxis,:,:].astype(np.float32),
+            _keys.CELL_KEY: sys.cell[np.newaxis,:,:].astype(np.float32)
+            }
+        else:
+            raise ValueError("The input system is not a list or ase.Atoms object!")
+        
+        self.check_structure(idx=None, structure=structure)
+
         return structure
     
     @abstractmethod
-    def get_eigenvalue(self, idx):
+    def get_eigenvalue(self, idx, band_index_min):
         pass # return a dict with energy eigenvalue and kpoint as key, keys includes: [_keys.ENERGY_EIGENVALUE_KEY, _keys.KPOINT_KEY]
 
     @abstractmethod
@@ -114,8 +144,9 @@ class Parser(ABC):
     # def get_field():
     #     pass
     
-    def check_structure(self, idx):
-        structure = self.get_structure(idx)
+    def check_structure(self, idx, structure=None):
+        if structure is None:
+            structure = self.get_structure(idx)
         atomic_number = j_must_have(structure, _keys.ATOMIC_NUMBERS_KEY)
         pos = j_must_have(structure, _keys.POSITIONS_KEY)
         cell = j_must_have(structure, _keys.CELL_KEY)
@@ -136,8 +167,9 @@ class Parser(ABC):
 
         return True
     
-    def check_eigenvalue(self, idx):
-        eigstatus = self.get_eigenvalue(idx)
+    def check_eigenvalue(self, idx, eigstatus=None):
+        if eigstatus is None:
+            eigstatus = self.get_eigenvalue(idx)
         eigs = j_must_have(eigstatus, _keys.ENERGY_EIGENVALUE_KEY)
         kpts = j_must_have(eigstatus, _keys.KPOINT_KEY)
 
@@ -172,17 +204,17 @@ class Parser(ABC):
 
         return True
     
-    def write(self, idx, outroot, format, eigenvalue, hamiltonian, overlap, density_matrix, **kwargs):
+    def write(self, idx, outroot, format, eigenvalue, hamiltonian, overlap, density_matrix, band_index_min, **kwargs):
         if format == "hdf5":
-            self.write_hdf5(idx, outroot, eigenvalue, hamiltonian, overlap, density_matrix)
+            self.write_hdf5(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         elif format in ["dat", "ase"]:
-            self.write_dat(idx=idx, outroot=outroot, fmt=format, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix)
+            self.write_dat(idx=idx, outroot=outroot, fmt=format, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         elif format == "lmdb":
-            self.write_lmdb(idx, outroot, eigenvalue, hamiltonian, overlap, density_matrix)
+            self.write_lmdb(idx=idx, outroot=outroot, eigenvalue=eigenvalue, hamiltonian=hamiltonian, overlap=overlap, density_matrix=density_matrix,band_index_min=band_index_min)
         else:
             raise NotImplementedError(f"Format: {format} is not implemented!")
         
-    def write_hdf5(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False):
+    def write_hdf5(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False, band_index_min=0):
         pass
     
     def write_struct(self, structure, out_dir, fmt='dat'):
@@ -195,14 +227,15 @@ class Parser(ABC):
             np.savetxt(os.path.join(out_dir, "pbc.dat"), structure[_keys.PBC_KEY])
         
         elif fmt=='ase':
-            self.structure_to_ase(structure)
+            ase_list = self.structure_to_ase(structure)
             trajfile = Trajectory(os.path.join(out_dir, "xdat.traj"), 'w')
-            trajfile.write(self.structure_to_ase(structure))
+            for istr in ase_list:
+                trajfile.write(istr)
             trajfile.close()
         else:
             raise NotImplementedError(f"Format: {fmt} is not implemented!")
 
-    def write_dat(self, idx, outroot, fmt='dat', eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False):
+    def write_dat(self, idx, outroot, fmt='dat', eigenvalue=False, hamiltonian=False, overlap=False, density_matrix=False, band_index_min=0):
         # write structure
         os.makedirs(outroot, exist_ok=True)
        
@@ -221,9 +254,10 @@ class Parser(ABC):
 
         # write eigenvalue
         if eigenvalue:
-            eigstatus = self.get_eigenvalue(idx)
+            eigstatus = self.get_eigenvalue(idx=idx, band_index_min=band_index_min)
+            self.check_eigenvalue(idx=idx, eigstatus=eigstatus)
             np.save(os.path.join(out_dir, "kpoints.npy"), eigstatus[_keys.KPOINT_KEY])
-            np.save(os.path.join(out_dir, "eigenvalues.npy"), eigstatus[_keys.ENERGY_EIGENVALUE_KEY].reshape(-1, eigstatus[_keys.ENERGY_EIGENVALUE_KEY].shape[-1]))
+            np.save(os.path.join(out_dir, "eigenvalues.npy"), eigstatus[_keys.ENERGY_EIGENVALUE_KEY])
 
         # write blocks
         if any([hamiltonian is not None, overlap is not None, density_matrix is not None]) and any([hamiltonian, overlap, density_matrix]):
@@ -258,14 +292,14 @@ class Parser(ABC):
 
         return True
     
-    def write_lmdb(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False):
+    def write_lmdb(self, idx, outroot, eigenvalue: bool=False, hamiltonian: bool=False, overlap: bool=False, density_matrix: bool=False,band_index_min=0):
         os.makedirs(outroot, exist_ok=True)
         out_dir = os.path.join(outroot, "data.{}.lmdb".format(os.getpid()))
         structure = self.get_structure(idx)
         if any([hamiltonian, overlap, density_matrix]):
             ham, ovp, dm = self.get_blocks(idx, hamiltonian, overlap, density_matrix)
         if eigenvalue:
-            eigstatus = self.get_eigenvalue(idx)
+            eigstatus = self.get_eigenvalue(idx=idx, band_index_min=band_index_min)
 
         n_frames = structure[_keys.POSITIONS_KEY].shape[0]
         lmdb_env = lmdb.open(out_dir, map_size=1048576000000, lock=True)

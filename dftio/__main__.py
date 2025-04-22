@@ -146,6 +146,13 @@ def main_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Whether to parse the kpoints and eigenvalues",
     )
+    parser_parse.add_argument(
+        "-min",
+        "--band_index_min",
+        type=int,
+        default=0,
+        help="The initial band index for eigenvalues to save.(0-band_index_min) bands will be ignored!"
+    )
     
     parser_band = subparsers.add_parser(
         "band",
@@ -248,7 +255,7 @@ def main():
             **dict_args
         )
         bandplot.load_dat(fmt=args.format)
-        bandplot.plot(min=args.band_index_min, max=args.band_index_max)
+        bandplot.plot(bmin=args.band_index_min, bmax=args.band_index_max)
 
 if __name__ == "__main__":
     main()

@@ -11,7 +11,9 @@ import numpy as np
 from dftio.io.parse import Parser, ParserRegister, find_target_line
 from dftio.data import _keys
 from dftio.register import Register
+import logging
 
+log = logging.getLogger(__name__)
 @ParserRegister.register("vasp")
 class VASPParser(Parser):
     def __init__(
@@ -21,7 +23,9 @@ class VASPParser(Parser):
             **kwargs
             ):
         super(VASPParser, self).__init__(root, prefix)
+
         self.raw_sys = [read(self.raw_datas[idx]+'/POSCAR') for idx in range(len(self.raw_datas))]
+        log.warning("VASP parser only supports the static (SCF or NSCF) calculations. MD and RELAX is not supported yet.")
     
     # essential
     def get_structure(self, idx):
@@ -33,12 +37,12 @@ class VASPParser(Parser):
     
     
     # essential
-    def get_eigenvalue(self, idx):
+    def get_eigenvalue(self, idx, band_index_min=0):
         path = self.raw_datas[idx]
         assert os.path.exists(os.path.join(path, "EIGENVAL"))
         kpts, eigs = self.read_EIGENVAL(os.path.join(path, "EIGENVAL"))
-
-        return {_keys.ENERGY_EIGENVALUE_KEY: eigs, _keys.KPOINT_KEY: kpts}
+        eigs = eigs[:, :, band_index_min:] # [1, nk, nbands]
+        return {_keys.ENERGY_EIGENVALUE_KEY: eigs.astype(np.float32), _keys.KPOINT_KEY: kpts.astype(np.float32)}
     
     @staticmethod
     def read_EIGENVAL(file):
