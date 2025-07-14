@@ -194,7 +194,7 @@ class AbacusParser(Parser):
                 else:
                     raise ValueError(f'{line} is not supported')
 
-        if mode == "scf":
+        if mode in ["scf", "nscf"]:
             if hamiltonian:
                 hamiltonian_dict, tmp = self.parse_matrix(
                     matrix_path=os.path.join(self.raw_datas[idx], "OUT.ABACUS", "data-HR-sparse_SPIN0.csr"), 
@@ -312,7 +312,7 @@ class AbacusParser(Parser):
             norbits = int(line.split()[-1])
             for line in f:
                 line1 = line.split()
-                if len(line1) == 0:
+                if len(line1) == 0 or len(line1) == 2:
                     break
                 num_element = int(line1[3])
                 if num_element != 0:
