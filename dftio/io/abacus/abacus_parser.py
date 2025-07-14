@@ -23,9 +23,7 @@ class AbacusParser(Parser):
             ):
         super(AbacusParser, self).__init__(root, prefix)
         mode = self.get_mode(idx=0)
-        if mode == 'nscf':
-            self.raw_sys = [dpdata.System(self.raw_datas[idx]+'/STRU', fmt='abacus/stru') for idx in range(len(self.raw_datas))]
-        elif mode == "scf":
+        if mode in ['nscf', "scf"]:
             self.raw_sys = [dpdata.System(read(os.path.join(self.raw_datas[idx], "OUT.ABACUS", "STRU.cif")), fmt="ase/structure") for idx in range(len(self.raw_datas))]
         else:
             self.raw_sys = [dpdata.LabeledSystem(self.raw_datas[idx], fmt='abacus/'+self.get_mode(idx)) for idx in range(len(self.raw_datas))]
