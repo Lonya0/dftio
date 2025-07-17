@@ -12,6 +12,10 @@ import numpy as np
 from dftio.io.parse import Parser, ParserRegister, find_target_line
 from dftio.data import _keys
 from dftio.register import Register
+import lmdb
+import pickle
+import shutil
+
 
 @ParserRegister.register("abacus")
 class AbacusParser(Parser):
@@ -359,4 +363,51 @@ class AbacusParser(Parser):
 
         return block_lefts @ mat @ block_rights.T
 
-        
+    def find_leaf_folder(self, root, leaf_folder_name):
+        found_flag = False
+        for sub_root, dirs, _0 in os.walk(root):
+            for dir_name in dirs:
+                if dir_name == leaf_folder_name:
+                    found_flag = True
+                    leaf_folder_path = os.path.join(sub_root, leaf_folder_name)
+                    return leaf_folder_path
+        if found_flag == False:
+            raise RuntimeError(f'Cannot find {leaf_folder_name} in {root}!')
+
+    def get_abs_h0_folders(self, h0_root):
+        abs_h0_folders = []
+        for a_H_folder in self.raw_datas:
+            a_leaf_folder_name = os.path.split(a_H_folder)[-1]
+            a_leaf_folder_path = self.find_leaf_folder(root=h0_root, leaf_folder_name=a_leaf_folder_name)
+            abs_h0_folders.append(a_leaf_folder_path)
+        return abs_h0_folders
+
+    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool=True):
+        h0_root = os.path.abspath(h0_src_root)
+        self.raw_datas = self.get_abs_h0_folders(h0_root=h0_root)
+        old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
+        os.makedirs(new_lmdb_path, exist_ok=True)
+        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, lock=True)
+        with old_db_env.begin() as old_txn, new_db_env.begin(write=True) as new_txn:
+            stat = old_txn.stat()
+            entries = stat['entries']
+            for idx in tqdm(range(entries)):
+                data_dict = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
+                data_dict = pickle.loads(data_dict)
+                h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
+                h0_block = h0_block[0]
+                old_ham_block = data_dict['hamiltonian']
+                delta_block = dict()
+                for a_block_name in old_ham_block.keys():
+                    a_delta_block = old_ham_block[a_block_name] - h0_block[a_block_name]
+                    delta_block[a_block_name] = a_delta_block
+                data_dict['hamiltonian'] = delta_block
+                data_dict['hamiltonian_full'] = old_ham_block
+                data_dict['hamiltonian_0'] = h0_block
+                data_dict = pickle.dumps(data_dict)
+                write_idx = new_db_env.stat()["entries"]
+                new_txn.put(write_idx.to_bytes(length=4, byteorder='big'), data_dict)
+        old_db_env.close()
+        new_db_env.close()
+        if not keep_old_lmdb:
+            shutil.rmtree(old_lmdb_path)
