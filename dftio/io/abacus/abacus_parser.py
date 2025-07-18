@@ -405,8 +405,7 @@ class AbacusParser(Parser):
                 data_dict['hamiltonian_full'] = old_ham_block
                 data_dict['hamiltonian_0'] = h0_block
                 data_dict = pickle.dumps(data_dict)
-                write_idx = new_db_env.stat()["entries"]
-                new_txn.put(write_idx.to_bytes(length=4, byteorder='big'), data_dict)
+                new_txn.put(idx.to_bytes(length=4, byteorder='big'), data_dict)
         old_db_env.close()
         new_db_env.close()
         if not keep_old_lmdb:
