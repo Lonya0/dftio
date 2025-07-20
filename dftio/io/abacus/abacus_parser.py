@@ -387,32 +387,21 @@ class AbacusParser(Parser):
                 valid_idx_list.append(None)
         return abs_h0_folders, valid_idx_list
 
-    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True,
-                       keep_delta_ham_only: bool = True):
+    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True, keep_delta_ham_only: bool = True):
         h0_root = os.path.abspath(h0_src_root)
         self.raw_datas, valid_idx_list = self.get_abs_h0_folders(h0_root=h0_root)
 
         # Open LMDB environments
         old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
         os.makedirs(new_lmdb_path, exist_ok=True)
-        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, writemap=True)
-
+        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, lock=True)
         counter = 0
-
-        # Commit writes in batches to prevent memory issues with large databases
-        BATCH_SIZE = 10
-        non_none_indices = [idx for idx in valid_idx_list if idx is not None]
-
-        with old_db_env.begin() as old_txn:
-            new_txn = new_db_env.begin(write=True)
-
-            for i, idx in enumerate(tqdm(non_none_indices)):
-                data_bytes = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
-                if not data_bytes:
+        with old_db_env.begin() as old_txn, new_db_env.begin(write=True) as new_txn:
+            for idx in tqdm(valid_idx_list):
+                if idx == None:
                     continue
-
-                data_dict = pickle.loads(data_bytes)
-
+                data_dict = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
+                data_dict = pickle.loads(data_dict)
                 h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
                 h0_block = h0_block[0]
                 old_ham_block = data_dict['hamiltonian']
@@ -425,17 +414,8 @@ class AbacusParser(Parser):
                     data_dict['hamiltonian_full'] = old_ham_block
                     data_dict['hamiltonian_0'] = h0_block
                 data_dict = pickle.dumps(data_dict)
-
                 new_txn.put(counter.to_bytes(length=4, byteorder='big'), data_dict)
                 counter = counter + 1
-
-                # Commit batch and start new transaction
-                if (i + 1) % BATCH_SIZE == 0:
-                    new_txn.commit()
-                    new_txn = new_db_env.begin(write=True)
-
-            # Commit remaining items
-            new_txn.commit()
 
         old_db_env.close()
         new_db_env.close()
