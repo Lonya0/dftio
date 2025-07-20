@@ -364,27 +364,20 @@ class AbacusParser(Parser):
         return block_lefts @ mat @ block_rights.T
 
     def get_abs_h0_folders(self, h0_root):
-        # --- MINIMAL CHANGE START ---
-        # OPTIMIZATION: Instead of searching the filesystem for each folder, we build a
-        # map of all directory names to their full paths once. This avoids repeated,
-        # slow 'os.walk' calls inside a loop.
+        # Build a map of all directory names to their full paths to avoid repeated os.walk calls
         folder_path_map = {}
         for sub_root, dirs, _ in os.walk(h0_root):
             for dirname in dirs:
                 folder_path_map[dirname] = os.path.join(sub_root, dirname)
-        # --- MINIMAL CHANGE END ---
 
         abs_h0_folders = []
         valid_idx_list = []
         for valid_idx, a_H_folder in enumerate(self.raw_datas):
             a_leaf_folder_name = os.path.split(a_H_folder)[-1]
 
-            # --- MINIMAL CHANGE START ---
-            # OPTIMIZATION: Use the pre-built map for a fast O(1) lookup instead of
-            # calling the slow self.find_leaf_folder() function.
+            # Use pre-built map for O(1) lookup instead of calling slow find_leaf_folder()
             a_leaf_folder_path = folder_path_map.get(a_leaf_folder_name)
             found_flag = a_leaf_folder_path is not None
-            # --- MINIMAL CHANGE END ---
 
             if found_flag:
                 abs_h0_folders.append(a_leaf_folder_path)
@@ -394,38 +387,32 @@ class AbacusParser(Parser):
                 valid_idx_list.append(None)
         return abs_h0_folders, valid_idx_list
 
-    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True):
+    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True,
+                       keep_delta_ham_only: bool = True):
         h0_root = os.path.abspath(h0_src_root)
         self.raw_datas, valid_idx_list = self.get_abs_h0_folders(h0_root=h0_root)
 
         # Open LMDB environments
         old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
         os.makedirs(new_lmdb_path, exist_ok=True)
-        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000,
-                               writemap=True)  # Use writemap=True for faster writes
+        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, writemap=True)
 
         counter = 0
 
-        # --- MINIMAL CHANGE START ---
-        # OPTIMIZATION: Instead of one giant transaction, we will commit writes in batches.
-        # This prevents storing all changes in memory, which is the cause of freezes for large DBs.
-        BATCH_SIZE = 100  # Adjust this number based on your system's RAM and data size
-
-        # Filter out None values to simplify the loop
+        # Commit writes in batches to prevent memory issues with large databases
+        BATCH_SIZE = 10
         non_none_indices = [idx for idx in valid_idx_list if idx is not None]
 
         with old_db_env.begin() as old_txn:
-            # Start the first write transaction manually
             new_txn = new_db_env.begin(write=True)
 
             for i, idx in enumerate(tqdm(non_none_indices)):
                 data_bytes = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
                 if not data_bytes:
-                    continue  # Skip if key doesn't exist in old DB
+                    continue
 
                 data_dict = pickle.loads(data_bytes)
 
-                # Original data processing logic remains unchanged
                 h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
                 h0_block = h0_block[0]
                 old_ham_block = data_dict['hamiltonian']
@@ -434,21 +421,21 @@ class AbacusParser(Parser):
                     a_delta_block = old_ham_block[a_block_name] - h0_block[a_block_name]
                     delta_block[a_block_name] = a_delta_block
                 data_dict['hamiltonian'] = delta_block
-                data_dict['hamiltonian_full'] = old_ham_block
-                data_dict['hamiltonian_0'] = h0_block
+                if not keep_delta_ham_only:
+                    data_dict['hamiltonian_full'] = old_ham_block
+                    data_dict['hamiltonian_0'] = h0_block
                 data_dict = pickle.dumps(data_dict)
 
                 new_txn.put(counter.to_bytes(length=4, byteorder='big'), data_dict)
                 counter = counter + 1
 
-                # OPTIMIZATION: Commit the current batch and start a new transaction
+                # Commit batch and start new transaction
                 if (i + 1) % BATCH_SIZE == 0:
                     new_txn.commit()
                     new_txn = new_db_env.begin(write=True)
 
-            # Commit any remaining items in the final batch
+            # Commit remaining items
             new_txn.commit()
-        # --- MINIMAL CHANGE END ---
 
         old_db_env.close()
         new_db_env.close()
