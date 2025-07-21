@@ -395,7 +395,6 @@ class AbacusParser(Parser):
         os.makedirs(new_lmdb_path, exist_ok=True)
         counter = 0
         batch_size = 50
-        batch_count = 0
 
         # Process in batches
         for batch_start in tqdm(range(0, len(valid_idx_list), batch_size), desc="Processing batches"):
