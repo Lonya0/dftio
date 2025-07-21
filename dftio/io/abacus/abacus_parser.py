@@ -387,37 +387,59 @@ class AbacusParser(Parser):
                 valid_idx_list.append(None)
         return abs_h0_folders, valid_idx_list
 
-    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True, keep_delta_ham_only: bool = True):
+    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True,
+                       keep_delta_ham_only: bool = True):
         h0_root = os.path.abspath(h0_src_root)
         self.raw_datas, valid_idx_list = self.get_abs_h0_folders(h0_root=h0_root)
 
-        # Open LMDB environments
-        old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
         os.makedirs(new_lmdb_path, exist_ok=True)
-        new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, lock=True)
         counter = 0
-        with old_db_env.begin() as old_txn, new_db_env.begin(write=True) as new_txn:
-            for idx in tqdm(valid_idx_list):
-                if idx == None:
-                    continue
-                data_dict = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
-                data_dict = pickle.loads(data_dict)
-                h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
-                h0_block = h0_block[0]
-                old_ham_block = data_dict['hamiltonian']
-                delta_block = dict()
-                for a_block_name in old_ham_block.keys():
-                    a_delta_block = old_ham_block[a_block_name] - h0_block[a_block_name]
-                    delta_block[a_block_name] = a_delta_block
-                data_dict['hamiltonian'] = delta_block
-                if not keep_delta_ham_only:
-                    data_dict['hamiltonian_full'] = old_ham_block
-                    data_dict['hamiltonian_0'] = h0_block
-                data_dict = pickle.dumps(data_dict)
-                new_txn.put(counter.to_bytes(length=4, byteorder='big'), data_dict)
-                counter = counter + 1
+        batch_size = 50
+        batch_count = 0
 
-        old_db_env.close()
-        new_db_env.close()
+        # Process in batches
+        for batch_start in tqdm(range(0, len(valid_idx_list), batch_size), desc="Processing batches"):
+            batch_end = min(batch_start + batch_size, len(valid_idx_list))
+            batch_indices = valid_idx_list[batch_start:batch_end]
+
+            # Open LMDB environments for each batch
+            old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
+            new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, lock=True)
+
+            with old_db_env.begin() as old_txn, new_db_env.begin(write=True) as new_txn:
+                for idx in batch_indices:
+                    if idx == None:
+                        continue
+                    # Get data from old LMDB
+                    data_dict = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
+                    data_dict = pickle.loads(data_dict)
+
+                    # Get H0 block
+                    h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
+                    h0_block = h0_block[0]
+                    old_ham_block = data_dict['hamiltonian']
+
+                    # Calculate delta blocks
+                    delta_block = dict()
+                    for a_block_name in old_ham_block.keys():
+                        a_delta_block = old_ham_block[a_block_name] - h0_block[a_block_name]
+                        delta_block[a_block_name] = a_delta_block
+
+                    # Update data dictionary
+                    data_dict['hamiltonian'] = delta_block
+                    if not keep_delta_ham_only:
+                        data_dict['hamiltonian_full'] = old_ham_block
+                        data_dict['hamiltonian_0'] = h0_block
+
+                    # Store in new LMDB
+                    data_dict = pickle.dumps(data_dict)
+                    new_txn.put(counter.to_bytes(length=4, byteorder='big'), data_dict)
+                    counter = counter + 1
+
+            # Close LMDB environments after each batch
+            old_db_env.close()
+            new_db_env.close()
+
+        # Remove old LMDB if requested
         if not keep_old_lmdb:
             shutil.rmtree(old_lmdb_path)
