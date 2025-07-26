@@ -12,6 +12,8 @@ from dftio.data import _keys
 from dftio.utils import j_must_have
 from dftio.register import Register
 from ase.io.trajectory import Trajectory
+import logging
+log = logging.getLogger(__name__)
 
 
 def find_target_line(f, target):
@@ -55,11 +57,16 @@ class Parser(ABC):
 
         self.root = root
         self.prefix = prefix
+        if '/' in prefix:
+            log.warning(f"There are '/' in the prefix: {prefix}, which should not appear. You should consider use '-r' "
+                        f"to change the root rather than include path in the prefix, which might cause error.")
 
         if isinstance(root, list) and all(isinstance(item, str) for item in root):
             self.raw_datas = root
         else:
-            self.raw_datas = glob.glob(root + '/*' + prefix + '*')
+            self.raw_datas = glob.glob(os.path.join(root, '*' + prefix + '*'))
+
+        assert(len(self.raw_datas) != 0, 'There are no folders that meet the requirements in the directory!')
     
     def __len__(self):
         return len(self.raw_datas)
