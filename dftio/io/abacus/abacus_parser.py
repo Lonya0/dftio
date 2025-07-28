@@ -12,6 +12,10 @@ import numpy as np
 from dftio.io.parse import Parser, ParserRegister, find_target_line
 from dftio.data import _keys
 from dftio.register import Register
+import lmdb
+import pickle
+import shutil
+
 
 @ParserRegister.register("abacus")
 class AbacusParser(Parser):
@@ -23,9 +27,7 @@ class AbacusParser(Parser):
             ):
         super(AbacusParser, self).__init__(root, prefix)
         mode = self.get_mode(idx=0)
-        if mode == 'nscf':
-            self.raw_sys = [dpdata.System(self.raw_datas[idx]+'/STRU', fmt='abacus/stru') for idx in range(len(self.raw_datas))]
-        elif mode == "scf":
+        if mode in ['nscf', "scf"]:
             self.raw_sys = [dpdata.System(read(os.path.join(self.raw_datas[idx], "OUT.ABACUS", "STRU.cif")), fmt="ase/structure") for idx in range(len(self.raw_datas))]
         else:
             self.raw_sys = [dpdata.LabeledSystem(self.raw_datas[idx], fmt='abacus/'+self.get_mode(idx)) for idx in range(len(self.raw_datas))]
@@ -194,7 +196,7 @@ class AbacusParser(Parser):
                 else:
                     raise ValueError(f'{line} is not supported')
 
-        if mode == "scf":
+        if mode in ["scf", "nscf"]:
             if hamiltonian:
                 hamiltonian_dict, tmp = self.parse_matrix(
                     matrix_path=os.path.join(self.raw_datas[idx], "OUT.ABACUS", "data-HR-sparse_SPIN0.csr"), 
@@ -312,7 +314,7 @@ class AbacusParser(Parser):
             norbits = int(line.split()[-1])
             for line in f:
                 line1 = line.split()
-                if len(line1) == 0:
+                if len(line1) == 0 or len(line1) == 2:
                     break
                 num_element = int(line1[3])
                 if num_element != 0:
@@ -361,4 +363,82 @@ class AbacusParser(Parser):
 
         return block_lefts @ mat @ block_rights.T
 
-        
+    def get_abs_h0_folders(self, h0_root):
+        # Build a map of all directory names to their full paths to avoid repeated os.walk calls
+        folder_path_map = {}
+        for sub_root, dirs, _ in os.walk(h0_root):
+            for dirname in dirs:
+                folder_path_map[dirname] = os.path.join(sub_root, dirname)
+
+        abs_h0_folders = []
+        valid_idx_list = []
+        for valid_idx, a_H_folder in enumerate(self.raw_datas):
+            a_leaf_folder_name = os.path.split(a_H_folder)[-1]
+
+            # Use pre-built map for O(1) lookup instead of calling slow find_leaf_folder()
+            a_leaf_folder_path = folder_path_map.get(a_leaf_folder_name)
+            found_flag = a_leaf_folder_path is not None
+
+            if found_flag:
+                abs_h0_folders.append(a_leaf_folder_path)
+                valid_idx_list.append(valid_idx)
+            else:
+                abs_h0_folders.append(None)
+                valid_idx_list.append(None)
+        return abs_h0_folders, valid_idx_list
+
+    def add_h0_delta_h(self, h0_src_root, old_lmdb_path, new_lmdb_path, keep_old_lmdb: bool = True,
+                       keep_delta_ham_only: bool = True):
+        h0_root = os.path.abspath(h0_src_root)
+        self.raw_datas, valid_idx_list = self.get_abs_h0_folders(h0_root=h0_root)
+
+        os.makedirs(new_lmdb_path, exist_ok=True)
+        counter = 0
+        batch_size = 50
+
+        # Process in batches
+        for batch_start in tqdm(range(0, len(valid_idx_list), batch_size), desc="Processing batches"):
+            batch_end = min(batch_start + batch_size, len(valid_idx_list))
+            batch_indices = valid_idx_list[batch_start:batch_end]
+
+            # Open LMDB environments for each batch
+            old_db_env = lmdb.open(old_lmdb_path, readonly=True, lock=False)
+            new_db_env = lmdb.open(new_lmdb_path, map_size=1048576000000, lock=True)
+
+            with old_db_env.begin() as old_txn, new_db_env.begin(write=True) as new_txn:
+                for idx in batch_indices:
+                    if idx == None:
+                        continue
+                    # Get data from old LMDB
+                    data_dict = old_txn.get(idx.to_bytes(length=4, byteorder='big'))
+                    data_dict = pickle.loads(data_dict)
+
+                    # Get H0 block
+                    h0_block, _0, _ = self.get_blocks(idx, hamiltonian=True, overlap=False, density_matrix=False)
+                    h0_block = h0_block[0]
+                    old_ham_block = data_dict['hamiltonian']
+
+                    # Calculate delta blocks
+                    delta_block = dict()
+                    for a_block_name in old_ham_block.keys():
+                        a_delta_block = old_ham_block[a_block_name] - h0_block[a_block_name]
+                        delta_block[a_block_name] = a_delta_block
+
+                    # Update data dictionary
+                    data_dict['hamiltonian'] = delta_block
+                    if not keep_delta_ham_only:
+                        data_dict['hamiltonian_full'] = old_ham_block
+                        data_dict['hamiltonian_0'] = h0_block
+
+                    # Store in new LMDB
+                    data_dict = pickle.dumps(data_dict)
+                    new_txn.put(counter.to_bytes(length=4, byteorder='big'), data_dict)
+                    counter = counter + 1
+
+            # Close LMDB environments after each batch
+            old_db_env.close()
+            new_db_env.close()
+
+        # Remove old LMDB if requested
+        if not keep_old_lmdb:
+            shutil.rmtree(old_lmdb_path)
