@@ -77,7 +77,7 @@ def main_parser() -> argparse.ArgumentParser:
         "--mode",
         type=str,
         default="abacus",
-        help="The name of the DFT software, currently support abacus/rescu/siesta/gaussian",
+        help="The name of the DFT software, currently support abacus/rescu/siesta/gaussian/pyatb",
     )
 
     parser_parse.add_argument(
@@ -244,9 +244,6 @@ def main():
             with Pool(args.num_workers) as p:
                 list(tqdm(p.imap(wapper(dict_args), range(len(parser))), total=len(parser), desc="Parsing the DFT files: "))
         else:
-            parser = ParserRegister(
-                **dict_args
-            )
             for i in tqdm(range(len(parser)), desc="Parsing the DFT files: "):
                 parser.write(idx=i, **dict_args)
         
