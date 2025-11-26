@@ -91,21 +91,35 @@ class VASPParser(Parser):
         return self.get_total_energy(idx)
     
     @staticmethod
-    def read_total_energy(file):
+    def read_total_energy(file="OUTCAR")->np.float64:
         """
         Extract energy(sigma->0) from VASP OUTCAR file.
         This is the extrapolated energy to 0K.
+
+        For unsuccessful runs, a warning will be logged. Although the energy
+        may still be extracted, its reliability is not guaranteed.
+        ------------------------------------------
+        Args:
+            file (str): Path to the VASP OUTCAR file.
+        Returns:
+            energy (np.float64): The extracted total energy(sigma->0).
+        ------------------------------------------
         """
+        success_completion = False
         energy = []
         with open(file, 'r') as f:
             data = f.readlines()
         for line in data:
+            if 'Voluntary context switches' in line:
+                success_completion = True
             if "energy(sigma->0)" in line:
                 energy.append(float(re.findall(r'[\-\d\.E]+', line)[-1]))
         if len(energy) > 1:
             log.warning("Multiple energy(sigma->0) found in OUTCAR. Using the last one.")
         energy = energy[-1] if energy else None
         assert energy is not None, "Cannot find energy(sigma->0) in OUTCAR."
+        if not success_completion:
+            log.warning(f"WARNING!!!  {file} does not indicate successful completion.")
         
         energy = np.array(energy, dtype=np.float64)
         return energy

@@ -181,10 +181,87 @@ def test_vasp_multiple_energies_warning():
             logger.removeHandler(handler)
 
 
+def test_vasp_unsuccessful_completion_warning():
+    """Test that warning is logged when OUTCAR does not indicate successful completion."""
+    import tempfile
+    import logging
+    from io import StringIO
+
+    # Create a temporary OUTCAR without "Voluntary context switches"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_outcar = os.path.join(tmpdir, "OUTCAR")
+        with open(test_outcar, 'w') as f:
+            f.write("  energy  without entropy=      -10.53  energy(sigma->0) =      -10.53\n")
+            # No "Voluntary context switches" line - simulates unsuccessful completion
+
+        # Capture log output
+        log_stream = StringIO()
+        handler = logging.StreamHandler(log_stream)
+        logger = logging.getLogger('dftio.io.vasp.vasp_parser')
+        logger.addHandler(handler)
+        logger.setLevel(logging.WARNING)
+
+        try:
+            energy = VASPParser.read_total_energy(test_outcar)
+
+            # Should still extract energy
+            assert np.isclose(energy, -10.53, atol=1e-5), \
+                f"Expected energy -10.53, got {energy}"
+
+            # Check if warning was logged about unsuccessful completion
+            log_contents = log_stream.getvalue()
+            assert "does not indicate successful completion" in log_contents, \
+                "Warning about unsuccessful completion should be logged"
+
+            print(f"Unsuccessful completion warning test passed")
+        finally:
+            logger.removeHandler(handler)
+
+
+def test_vasp_successful_completion_no_warning():
+    """Test that no warning is logged when OUTCAR indicates successful completion."""
+    import tempfile
+    import logging
+    from io import StringIO
+
+    # Create a temporary OUTCAR with "Voluntary context switches"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        test_outcar = os.path.join(tmpdir, "OUTCAR")
+        with open(test_outcar, 'w') as f:
+            f.write("  energy  without entropy=      -10.53  energy(sigma->0) =      -10.53\n")
+            f.write("    Voluntary context switches: 1234\n")  # Indicates successful completion
+
+        # Capture log output
+        log_stream = StringIO()
+        handler = logging.StreamHandler(log_stream)
+        logger = logging.getLogger('dftio.io.vasp.vasp_parser')
+        logger.addHandler(handler)
+        logger.setLevel(logging.WARNING)
+
+        try:
+            energy = VASPParser.read_total_energy(test_outcar)
+
+            # Should extract energy
+            assert np.isclose(energy, -10.53, atol=1e-5), \
+                f"Expected energy -10.53, got {energy}"
+
+            # Check that no warning about unsuccessful completion was logged
+            log_contents = log_stream.getvalue()
+            assert "does not indicate successful completion" not in log_contents, \
+                "No warning about unsuccessful completion should be logged for successful runs"
+
+            print(f"Successful completion (no warning) test passed")
+        finally:
+            logger.removeHandler(handler)
+
+
+
 if __name__ == "__main__":
     test_vasp_scf_energy()
     test_vasp_read_total_energy_static()
     test_vasp_energy_write_dat()
     test_vasp_energy_write_lmdb()
     test_vasp_multiple_energies_warning()
+    test_vasp_unsuccessful_completion_warning()
+    test_vasp_successful_completion_no_warning()
     print("\nAll VASP energy extraction tests passed!")
