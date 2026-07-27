@@ -10,15 +10,15 @@ license = {text = "MIT"}
 requires-python = ">=3.9,<3.13"
 dependencies = [
     "numpy",
-    "scipy>=1.11,<1.12",
+    "scipy>=1.12",
     "matplotlib",
-    "torch>=2.0.0,<2.5.1",
+    "torch>=2.5.1,<=2.12.1",
     "ase",
     "pyyaml",
     "future",
     "dargs==0.4.4",
     "e3nn>=0.5.1",
-    "h5py>=3.7.0,<3.11.0,!=3.10.0",
+    "h5py>=3.11",
     "lmdb==1.4.1",
     "sisl>=0.14.3",
     "dpdata>=0.2.20",
@@ -52,9 +52,9 @@ local_scheme = "no-local-version"
 # UV 特定配置
 # PyTorch Geometric 为 torch_scatter 提供预编译的 wheel
 # 默认: CPU 版本。如需 GPU 版本，使用:
-#   uv sync --find-links https://data.pyg.org/whl/torch-2.5.0+cu121.html
+#   uv sync --find-links https://data.pyg.org/whl/torch-2.12.1+cu121.html
 [tool.uv]
-find-links = ["https://data.pyg.org/whl/torch-2.5.0+cpu.html"]
+find-links = ["https://data.pyg.org/whl/torch-2.12.1+cpu.html"]
 
 # Pytest 配置
 # - testpaths: 指定测试文件所在目录

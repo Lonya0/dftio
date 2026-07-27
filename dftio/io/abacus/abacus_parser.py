@@ -31,7 +31,7 @@ class AbacusParser(Parser):
             ):
         super(AbacusParser, self).__init__(root, prefix)
         mode = self.get_mode(idx=0)
-        if mode in ['nscf', "scf"]:
+        if mode in ['nscf', "scf", "get_S"]:
             self.raw_sys = [dpdata.System(read(os.path.join(self._get_output_dir(idx), "STRU.cif")), fmt="ase/structure") for idx in range(len(self.raw_datas))]
         else:
             self.raw_sys = [dpdata.LabeledSystem(self.raw_datas[idx], fmt='abacus/'+self.get_mode(idx)) for idx in range(len(self.raw_datas))]
@@ -183,6 +183,10 @@ class AbacusParser(Parser):
     # essential
     def get_blocks(self, idx, hamiltonian=True, overlap=False, density_matrix=False):
         mode = self.get_mode(idx)
+        if mode == "get_S" and (hamiltonian or density_matrix):
+            raise NotImplementedError(
+                "ABACUS get_S calculations only produce an overlap matrix."
+            )
         logfile = "running_"+mode+".log"
         hamiltonian_dict, overlap_dict, density_matrix_dict = None, None, None
         sys = self.raw_sys[idx]
@@ -254,7 +258,7 @@ class AbacusParser(Parser):
                 else:
                     raise ValueError(f'{line} is not supported')
 
-        if mode in ["scf", "nscf"]:
+        if mode in ["scf", "nscf", "get_S"]:
             if hamiltonian:
                 hamiltonian_dict, tmp = self.parse_matrix(
                     matrix_path=os.path.join(output_dir, "data-HR-sparse_SPIN0.csr"), 
@@ -269,8 +273,11 @@ class AbacusParser(Parser):
                 hamiltonian_dict = [hamiltonian_dict]
             
             if overlap:
+                overlap_filename = (
+                    "SR.csr" if mode == "get_S" else "data-SR-sparse_SPIN0.csr"
+                )
                 overlap_dict, tmp = self.parse_matrix(
-                    matrix_path=os.path.join(output_dir, "data-SR-sparse_SPIN0.csr"), 
+                    matrix_path=os.path.join(output_dir, overlap_filename),
                     nsites=nsites,
                     site_norbits=site_norbits,
                     orbital_types_dict=orbital_types_dict,

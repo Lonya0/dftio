@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pytest
 import shutil
 from dftio.io.abacus.abacus_parser import AbacusParser
@@ -42,6 +43,15 @@ def abacus_parser(tmp_path):
     return AbacusParser(
         root=str(tmp_path),
         prefix='calculation'
+    )
+
+
+@pytest.fixture
+def abacus_get_s_parser():
+    """Create a parser for an ABACUS get_S calculation."""
+    return AbacusParser(
+        root="test/data",
+        prefix="abacus_get_S",
     )
 
 def test_abacus_parser_init(abacus_parser, tmp_path):
@@ -105,3 +115,38 @@ def test_get_blocks(abacus_parser):
     assert isinstance(ovp, list)
     assert len(ovp) > 0
     assert isinstance(ovp[0], dict)
+
+
+def test_get_s_blocks(abacus_get_s_parser):
+    """Test parsing the overlap-only output of an ABACUS get_S calculation."""
+    assert abacus_get_s_parser.get_mode(0) == "get_S"
+    assert abacus_get_s_parser.get_basis(0) == {"C": "2s2p1d"}
+
+    structure = abacus_get_s_parser.get_structure(0)
+    assert structure[_keys.ATOMIC_NUMBERS_KEY].shape == (40,)
+    assert structure[_keys.POSITIONS_KEY].shape == (1, 40, 3)
+
+    ham, ovp, dm = abacus_get_s_parser.get_blocks(
+        0,
+        hamiltonian=False,
+        overlap=True,
+        density_matrix=False,
+    )
+
+    assert ham is None
+    assert dm is None
+    assert isinstance(ovp, list)
+    assert len(ovp) == 1
+    assert isinstance(ovp[0], dict)
+    assert len(ovp[0]) == 2160
+    assert ovp[0]["0_0_0_0_0"].shape == (13, 13)
+    assert ovp[0]["0_0_0_0_0"][0, 0] == pytest.approx(1.0)
+    assert np.isfinite(ovp[0]["0_0_0_0_0"]).all()
+
+    with pytest.raises(NotImplementedError, match="only produce an overlap matrix"):
+        abacus_get_s_parser.get_blocks(
+            0,
+            hamiltonian=True,
+            overlap=False,
+            density_matrix=False,
+        )
